@@ -29,7 +29,8 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    modImplementation "maven.modrinth:sodium:${project.sodium_version}"
+//  modImplementation "maven.modrinth:sodium:${project.sodium_version}"
+    compileOnly files("libs/sodium-fabric-mc1.16.5-0.2.0+build.4.jar")
     implementation "org.joml:joml:1.10.2"
     modImplementation "maven.modrinth:iris:${project.iris_version}"
 
