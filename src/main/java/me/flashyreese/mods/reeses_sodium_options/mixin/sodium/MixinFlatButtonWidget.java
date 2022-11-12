@@ -23,7 +23,7 @@ public abstract class MixinFlatButtonWidget extends AbstractWidget implements Fl
     @Unique
     private boolean leftAligned;
 
-    @Redirect(method = "render", at = @At(value = "INVOKE", target = "Lme/jellysquid/mods/sodium/client/gui/widgets/FlatButtonWidget;drawString(Lnet/minecraft/client/util/math/MatrixStack;Ljava/lang/Text;III)V"))
+    @Redirect(method = "render", at = @At(value = "INVOKE", target = "Lme/jellysquid/mods/sodium/client/gui/widgets/FlatButtonWidget;drawString(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/text/Text;III)V"))
     public void redirectDrawString(FlatButtonWidget instance, MatrixStack matrixStack, Text text, int x, int y, int color) {
         if (this.leftAligned) {
             this.drawString(matrixStack, text, this.dim.getOriginX() + 10, y, color);
