@@ -21,6 +21,9 @@ repositories {
         }
     }
     maven {
+        url "https://jitpack.io"
+    }
+    maven {
         url "https://maven.flashyreese.me/releases"
     }
     maven {
@@ -36,7 +39,9 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
     //modImplementation "me.jellysquid.mods:sodium-fabric:0.4.10+build.219"
-    modImplementation "maven.modrinth:sodium:${project.sodium_version}"
+    modImplementation files("./custom/sodium-fabric-mc1.16.5-0.2.0+rev.448932a-dirty.jar")
+    //modImplementation "com.github.7777777-4547:sodium-fabric:mc1.16.5-0.2.0-l10n-replay"
+    //modImplementation "maven.modrinth:sodium:${project.sodium_version}"
     //modImplementation "maven.modrinth:iris:${project.iris_version}"
 
     modRuntimeOnly "maven.modrinth:lazydfu:0.1.2"

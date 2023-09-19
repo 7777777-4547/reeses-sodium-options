@@ -38,7 +38,7 @@ public class StringUtils {
 
         for (OptionPage page : pages) {
             for (Option<?> option : page.getOptions()) {
-                String sentence = (option.getName()/*  +
+                String sentence = (option.getName().getString()/*  +
                         " " +
                         option.getTooltip().getString()+
                         " " +

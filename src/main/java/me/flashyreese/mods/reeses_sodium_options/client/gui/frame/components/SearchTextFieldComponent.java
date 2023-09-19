@@ -30,7 +30,7 @@ public class SearchTextFieldComponent extends AbstractWidget {
     private final TextRenderer textRenderer = MinecraftClient.getInstance().textRenderer;
     private final Predicate<String> textPredicate = Objects::nonNull;
     private final BiFunction<String, Integer, OrderedText> renderTextProvider = (string, firstCharacterIndex) -> OrderedText.styledForwardsVisitedString(string, Style.EMPTY);
-    private final AtomicReference<String> tabFrameSelectedTab;
+    private final AtomicReference<Text> tabFrameSelectedTab;
     private final AtomicReference<Integer> tabFrameScrollBarOffset;
     private final AtomicReference<Integer> optionPageScrollBarOffset;
     private final int tabDimHeight;
@@ -48,7 +48,7 @@ public class SearchTextFieldComponent extends AbstractWidget {
     private boolean focused;
     private int lastCursorPosition = this.getCursor();
 
-    public SearchTextFieldComponent(Dim2i dim, List<OptionPage> pages, AtomicReference<String> tabFrameSelectedTab, AtomicReference<Integer> tabFrameScrollBarOffset, AtomicReference<Integer> optionPageScrollBarOffset, int tabDimHeight, SodiumVideoOptionsScreen sodiumVideoOptionsScreen, AtomicReference<String> lastSearch, AtomicReference<Integer> lastSearchIndex) {
+    public SearchTextFieldComponent(Dim2i dim, List<OptionPage> pages, AtomicReference<Text> tabFrameSelectedTab, AtomicReference<Integer> tabFrameScrollBarOffset, AtomicReference<Integer> optionPageScrollBarOffset, int tabDimHeight, SodiumVideoOptionsScreen sodiumVideoOptionsScreen, AtomicReference<String> lastSearch, AtomicReference<Integer> lastSearchIndex) {
         this.dim = dim;
         this.pages = pages;
         this.tabFrameSelectedTab = tabFrameSelectedTab;

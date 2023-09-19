@@ -7,6 +7,7 @@ import me.jellysquid.mods.sodium.client.gui.widgets.AbstractWidget;
 import me.jellysquid.mods.sodium.client.gui.widgets.FlatButtonWidget;
 import me.jellysquid.mods.sodium.client.util.Dim2i;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.Text;
 import org.apache.commons.lang3.Validate;
 
 import java.util.ArrayList;
@@ -22,12 +23,12 @@ public class TabFrame extends AbstractFrame {
     private final Dim2i frameSection;
     private final List<Tab<?>> tabs = new ArrayList<>();
     private final Runnable onSetTab;
-    private final AtomicReference<String> tabSectionSelectedTab;
+    private final AtomicReference<Text> tabSectionSelectedTab;
     private ScrollBarComponent tabSectionScrollBar = null;
     private Tab<?> selectedTab;
     private AbstractFrame selectedFrame;
 
-    public TabFrame(Dim2i dim, boolean renderOutline, List<Tab<?>> tabs, Runnable onSetTab, AtomicReference<String> tabSectionSelectedTab, AtomicReference<Integer> tabSectionScrollBarOffset) {
+    public TabFrame(Dim2i dim, boolean renderOutline, List<Tab<?>> tabs, Runnable onSetTab, AtomicReference<Text> tabSectionSelectedTab, AtomicReference<Integer> tabSectionScrollBarOffset) {
         super(dim, renderOutline);
         this.tabs.addAll(tabs);
         int tabSectionY = this.tabs.size() * 18;
@@ -64,7 +65,7 @@ public class TabFrame extends AbstractFrame {
 
     public void setTab(Tab<?> tab) {
         this.selectedTab = tab;
-        this.tabSectionSelectedTab.set(this.selectedTab.getTitle().getString());
+        this.tabSectionSelectedTab.set(this.selectedTab.getTitle());
         if (this.onSetTab != null) {
             this.onSetTab.run();
         }
@@ -138,7 +139,7 @@ public class TabFrame extends AbstractFrame {
             int height = 18;
             Dim2i tabDim = new Dim2i(x, y, width, height);
 
-            FlatButtonWidget button = new FlatButtonWidget(tabDim, tab.getTitle().asString(), () -> this.setTab(tab));
+            FlatButtonWidget button = new FlatButtonWidget(tabDim, tab.getTitle(), () -> this.setTab(tab));
             button.setSelected(this.selectedTab == tab);
             ((FlatButtonWidgetExtended) button).setLeftAligned(true);
             this.children.add(button);
@@ -162,7 +163,7 @@ public class TabFrame extends AbstractFrame {
         private Dim2i dim;
         private boolean renderOutline;
         private Runnable onSetTab;
-        private AtomicReference<String> tabSectionSelectedTab = new AtomicReference<>(null);
+        private AtomicReference<Text> tabSectionSelectedTab = new AtomicReference<>(null);
         private AtomicReference<Integer> tabSectionScrollBarOffset = new AtomicReference<>(0);
 
         public Builder setDimension(Dim2i dim) {
@@ -185,7 +186,7 @@ public class TabFrame extends AbstractFrame {
             return this;
         }
 
-        public Builder setTabSectionSelectedTab(AtomicReference<String> tabSectionSelectedTab) {
+        public Builder setTabSectionSelectedTab(AtomicReference<Text> tabSectionSelectedTab) {
             this.tabSectionSelectedTab = tabSectionSelectedTab;
             return this;
         }
