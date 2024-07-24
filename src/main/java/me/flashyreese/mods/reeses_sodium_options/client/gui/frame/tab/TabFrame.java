@@ -1,14 +1,15 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.frame.tab;
 
+import me.flashyreese.mods.reeses_sodium_options.client.gui.Dim2iExtended;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.FlatButtonWidgetExtended;
+import me.flashyreese.mods.reeses_sodium_options.client.gui.Point2i;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.frame.AbstractFrame;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.frame.components.ScrollBarComponent;
 import me.jellysquid.mods.sodium.client.gui.widgets.AbstractWidget;
 import me.jellysquid.mods.sodium.client.gui.widgets.FlatButtonWidget;
 import me.jellysquid.mods.sodium.client.util.Dim2i;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.ScreenRect;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
 import org.apache.commons.lang3.Validate;
 
 import java.util.ArrayList;
@@ -24,12 +25,12 @@ public class TabFrame extends AbstractFrame {
     private final Dim2i frameSection;
     private final List<Tab<?>> tabs = new ArrayList<>();
     private final Runnable onSetTab;
-    private final AtomicReference<Text> tabSectionSelectedTab;
+    private final AtomicReference<Component> tabSectionSelectedTab;
     private ScrollBarComponent tabSectionScrollBar = null;
     private Tab<?> selectedTab;
     private AbstractFrame selectedFrame;
 
-    public TabFrame(Dim2i dim, boolean renderOutline, List<Tab<?>> tabs, Runnable onSetTab, AtomicReference<Text> tabSectionSelectedTab, AtomicReference<Integer> tabSectionScrollBarOffset) {
+    public TabFrame(Dim2i dim, boolean renderOutline, List<Tab<?>> tabs, Runnable onSetTab, AtomicReference<Component> tabSectionSelectedTab, AtomicReference<Integer> tabSectionScrollBarOffset) {
         super(dim, renderOutline);
         this.tabs.addAll(tabs);
         int tabSectionY = this.tabs.size() * 18;
@@ -43,8 +44,9 @@ public class TabFrame extends AbstractFrame {
         this.onSetTab = onSetTab;
         if (this.tabSectionCanScroll) {
             this.tabSectionScrollBar = new ScrollBarComponent(new Dim2i(this.tabSection.getLimitX() - 11, this.tabSection.y(), 10, this.tabSection.height()), ScrollBarComponent.Mode.VERTICAL, tabSectionY, this.dim.height(), offset -> {
-                this.buildFrame();
+                //this.buildFrame();
                 tabSectionScrollBarOffset.set(offset);
+                ((Dim2iExtended) ((Object) this.tabSection)).setY(this.dim.y() - this.tabSectionScrollBar.getOffset());
             }, this.dim);
             this.tabSectionScrollBar.setOffset(tabSectionScrollBarOffset.get());
         }
@@ -76,7 +78,7 @@ public class TabFrame extends AbstractFrame {
     @Override
     public void buildFrame() {
         this.children.clear();
-        this.drawable.clear();
+        this.renderable.clear();
         this.controlElements.clear();
 
         if (this.selectedTab == null) {
@@ -91,19 +93,34 @@ public class TabFrame extends AbstractFrame {
 
         if (this.tabSectionCanScroll) {
             this.tabSectionScrollBar.updateThumbPosition();
+            this.children.add(this.tabSectionScrollBar);
         }
 
         super.buildFrame();
+        this.registerFocusListener(element -> {
+            if (element instanceof FlatButtonWidgetExtended flatButtonWidget && this.tabSectionCanScroll) {
+                Dim2i dim = flatButtonWidget.getDimensions();
+                int inputOffset = this.tabSectionScrollBar.getOffset();
+                if (dim.y() <= this.dim.y()) {
+                    inputOffset += dim.y() - this.dim.y();
+                } else if (dim.getLimitY() >= this.dim.getLimitY()) {
+                    inputOffset += dim.getLimitY() - this.dim.getLimitY();
+                }
+                this.tabSectionScrollBar.setOffset(inputOffset);
+            }
+        });
     }
 
     private void rebuildTabs() {
         int offsetY = 0;
         for (Tab<?> tab : this.tabs) {
             int x = this.tabSection.x();
-            int y = this.tabSection.y() + offsetY - (this.tabSectionCanScroll ? this.tabSectionScrollBar.getOffset() : 0);
+            int y = this.tabSection.y();
+            //int yOffset = offsetY - (this.tabSectionCanScroll ? this.tabSectionScrollBar.getOffset() : 0);
             int width = this.tabSection.width() - (this.tabSectionCanScroll ? 12 : 4);
             int height = 18;
-            Dim2i tabDim = new Dim2i(x, y, width, height);
+            Dim2i tabDim = new Dim2i(0, offsetY, width, height);
+            ((Dim2iExtended)(Object) tabDim).setPoint2i(((Point2i)(Object) this.tabSection));
 
             FlatButtonWidget button = new FlatButtonWidget(tabDim, tab.getTitle(), () -> this.setTab(tab));
             button.setSelected(this.selectedTab == tab);
@@ -125,17 +142,17 @@ public class TabFrame extends AbstractFrame {
     }
 
     @Override
-    public void render(DrawContext drawContext, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
         this.applyScissor(this.dim.x(), this.dim.y(), this.dim.width(), this.dim.height(), () -> {
             for (AbstractWidget widget : this.children) {
                 if (widget != this.selectedFrame) {
-                    widget.render(drawContext, mouseX, mouseY, delta);
+                    widget.render(guiGraphics, mouseX, mouseY, delta);
                 }
             }
         });
-        this.selectedFrame.render(drawContext, mouseX, mouseY, delta);
+        this.selectedFrame.render(guiGraphics, mouseX, mouseY, delta);
         if (this.tabSectionCanScroll) {
-            this.tabSectionScrollBar.render(drawContext, mouseX, mouseY, delta);
+            this.tabSectionScrollBar.render(guiGraphics, mouseX, mouseY, delta);
         }
     }
 
@@ -155,8 +172,8 @@ public class TabFrame extends AbstractFrame {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        return super.mouseScrolled(mouseX, mouseY, amount) || (this.tabSectionCanScroll && this.tabSectionScrollBar.mouseScrolled(mouseX, mouseY, amount));
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount) || (this.tabSectionCanScroll && this.tabSectionScrollBar.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount));
     }
 
     public static class Builder {
@@ -164,7 +181,7 @@ public class TabFrame extends AbstractFrame {
         private Dim2i dim;
         private boolean renderOutline;
         private Runnable onSetTab;
-        private AtomicReference<Text> tabSectionSelectedTab = new AtomicReference<>(null);
+        private AtomicReference<Component> tabSectionSelectedTab = new AtomicReference<>(null);
         private AtomicReference<Integer> tabSectionScrollBarOffset = new AtomicReference<>(0);
 
         public Builder setDimension(Dim2i dim) {
@@ -187,7 +204,7 @@ public class TabFrame extends AbstractFrame {
             return this;
         }
 
-        public Builder setTabSectionSelectedTab(AtomicReference<Text> tabSectionSelectedTab) {
+        public Builder setTabSectionSelectedTab(AtomicReference<Component> tabSectionSelectedTab) {
             this.tabSectionSelectedTab = tabSectionSelectedTab;
             return this;
         }

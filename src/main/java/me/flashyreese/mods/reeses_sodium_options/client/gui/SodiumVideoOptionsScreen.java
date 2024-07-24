@@ -7,22 +7,30 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.frame.tab.Tab;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.frame.tab.TabFrame;
 import me.flashyreese.mods.reeses_sodium_options.compat.IrisCompat;
 import me.jellysquid.mods.sodium.client.SodiumClientMod;
+import me.jellysquid.mods.sodium.client.data.fingerprint.HashedFingerprint;
 import me.jellysquid.mods.sodium.client.gui.SodiumGameOptions;
 import me.jellysquid.mods.sodium.client.gui.options.Option;
 import me.jellysquid.mods.sodium.client.gui.options.OptionFlag;
 import me.jellysquid.mods.sodium.client.gui.options.OptionPage;
 import me.jellysquid.mods.sodium.client.gui.options.storage.OptionStorage;
+import me.jellysquid.mods.sodium.client.gui.prompt.ScreenPrompt;
+import me.jellysquid.mods.sodium.client.gui.prompt.ScreenPromptable;
 import me.jellysquid.mods.sodium.client.gui.widgets.FlatButtonWidget;
 import me.jellysquid.mods.sodium.client.util.Dim2i;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.option.VideoOptionsScreen;
-import net.minecraft.text.Text;
-import net.minecraft.util.Util;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.Util;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.VideoSettingsScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -30,9 +38,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
-public class SodiumVideoOptionsScreen extends Screen {
+public class SodiumVideoOptionsScreen extends Screen implements ScreenPromptable {
 
-    private static final AtomicReference<Text> tabFrameSelectedTab = new AtomicReference<>(null);
+    private static final AtomicReference<Component> tabFrameSelectedTab = new AtomicReference<>(null);
     private static final AtomicReference<Integer> tabFrameScrollBarOffset = new AtomicReference<>(0);
     private static final AtomicReference<Integer> optionPageScrollBarOffset = new AtomicReference<>(0);
 
@@ -48,21 +56,78 @@ public class SodiumVideoOptionsScreen extends Screen {
 
     private SearchTextFieldComponent searchTextField;
 
+    private @Nullable ScreenPrompt prompt;
+
     public SodiumVideoOptionsScreen(Screen prev, List<OptionPage> pages) {
-        super(Text.literal("Reese's Sodium Menu"));
+        super(Component.literal("Reese's Sodium Menu"));
         this.prevScreen = prev;
         this.pages.addAll(pages);
+
+        this.checkPromptTimers();
+    }
+
+    private void checkPromptTimers() {
+        // Never show the prompt in developer workspaces.
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            return;
+        }
+
+        var options = SodiumClientMod.options();
+
+        // If the user has disabled the nags forcefully (by config), or has already seen the prompt, don't show it again.
+        if (options.notifications.hasSeenDonationPrompt) {
+            return;
+        }
+
+        HashedFingerprint fingerprint = null;
+
+        try {
+            fingerprint = HashedFingerprint.loadFromDisk();
+        } catch (Throwable t) {
+            SodiumClientMod.logger()
+                    .error("Failed to read the fingerprint from disk", t);
+        }
+
+        // If the fingerprint doesn't exist, or failed to be loaded, abort.
+        if (fingerprint == null) {
+            return;
+        }
+
+        // The fingerprint records the installation time. If it's been a while since installation, show the user
+        // a prompt asking for them to consider donating.
+        var now = Instant.now();
+        var threshold = Instant.ofEpochSecond(fingerprint.timestamp())
+                .plus(3, ChronoUnit.DAYS);
+
+        if (now.isAfter(threshold)) {
+            this.openDonationPrompt(options);
+        }
+    }
+
+    private void openDonationPrompt(SodiumGameOptions options) {
+        var prompt = new ScreenPrompt(this, DONATION_PROMPT_MESSAGE, 320, 190,
+                new ScreenPrompt.Action(Component.literal("Buy us a coffee"), this::openDonationPage));
+        prompt.setFocused(true);
+
+        options.notifications.hasSeenDonationPrompt = true;
+
+        try {
+            SodiumGameOptions.writeToDisk(options);
+        } catch (IOException e) {
+            SodiumClientMod.logger()
+                    .error("Failed to update config file", e);
+        }
     }
 
     // Hackalicious! Rebuild UI
     public void rebuildUI() {
-        this.clearAndInit();
+        this.rebuildWidgets();
     }
 
     @Override
     protected void init() {
         this.frame = this.parentFrameBuilder().build();
-        this.addDrawableChild(this.frame);
+        this.addRenderableWidget(this.frame);
 
         this.searchTextField.setFocused(!lastSearch.get().trim().isEmpty());
         if (this.searchTextField.isFocused()) {
@@ -88,26 +153,26 @@ public class SodiumVideoOptionsScreen extends Screen {
         Dim2i applyButtonDim = new Dim2i(tabFrameDim.getLimitX() - 134, tabFrameDim.getLimitY() + 5, 65, 20);
         Dim2i closeButtonDim = new Dim2i(tabFrameDim.getLimitX() - 65, tabFrameDim.getLimitY() + 5, 65, 20);
 
-        Text donationText = Text.translatable("sodium.options.buttons.donate");
-        int donationTextWidth = this.client.textRenderer.getWidth(donationText);
+        Component donationText = Component.translatable("sodium.options.buttons.donate");
+        int donationTextWidth = this.minecraft.font.width(donationText);
 
         Dim2i donateButtonDim = new Dim2i(tabFrameDim.getLimitX() - 32 - donationTextWidth, tabFrameDim.y() - 26, 10 + donationTextWidth, 20);
         Dim2i hideDonateButtonDim = new Dim2i(tabFrameDim.getLimitX() - 20, tabFrameDim.y() - 26, 20, 20);
 
-        this.undoButton = new FlatButtonWidget(undoButtonDim, Text.translatable("sodium.options.buttons.undo"), this::undoChanges);
-        this.applyButton = new FlatButtonWidget(applyButtonDim, Text.translatable("sodium.options.buttons.apply"), this::applyChanges);
-        this.closeButton = new FlatButtonWidget(closeButtonDim, Text.translatable("gui.done"), this::close);
+        this.undoButton = new FlatButtonWidget(undoButtonDim, Component.translatable("sodium.options.buttons.undo"), this::undoChanges);
+        this.applyButton = new FlatButtonWidget(applyButtonDim, Component.translatable("sodium.options.buttons.apply"), this::applyChanges);
+        this.closeButton = new FlatButtonWidget(closeButtonDim, Component.translatable("gui.done"), this::onClose);
 
         this.donateButton = new FlatButtonWidget(donateButtonDim, donationText, this::openDonationPage);
-        this.hideDonateButton = new FlatButtonWidget(hideDonateButtonDim, Text.literal("x"), this::hideDonationButton);
+        this.hideDonateButton = new FlatButtonWidget(hideDonateButtonDim, Component.literal("x"), this::hideDonationButton);
 
-        if (SodiumClientMod.options().notifications.hideDonationButton) {
+        if (SodiumClientMod.options().notifications.hasClearedDonationButton) {
             this.setDonationButtonVisibility(false);
         }
 
 
         Dim2i searchTextFieldDim;
-        if (SodiumClientMod.options().notifications.hideDonationButton) {
+        if (SodiumClientMod.options().notifications.hasClearedDonationButton) {
             searchTextFieldDim = new Dim2i(tabFrameDim.x(), tabFrameDim.y() - 26, tabFrameDim.width(), 20);
         } else {
             searchTextFieldDim = new Dim2i(tabFrameDim.x(), tabFrameDim.y() - 26, tabFrameDim.width() - (tabFrameDim.getLimitX() - donateButtonDim.x()) - 2, 20);
@@ -118,9 +183,9 @@ public class SodiumVideoOptionsScreen extends Screen {
 
         if (IrisCompat.isIrisPresent()) { // FabricLoader.getInstance().isModLoaded("iris")) {
             //int size = this.client.textRenderer.getWidth(Text.translatable(IrisApi.getInstance().getMainScreenLanguageKey()));
-            int size = this.client.textRenderer.getWidth(Text.translatable(IrisCompat.getIrisShaderPacksScreenLanguageKey()));
+            int size = this.minecraft.font.width(Component.translatable(IrisCompat.getIrisShaderPacksScreenLanguageKey()));
             Dim2i shaderPackButtonDim;
-            if (!SodiumClientMod.options().notifications.hideDonationButton) {
+            if (!(SodiumClientMod.options().notifications.hasClearedDonationButton)) {
                 shaderPackButtonDim = new Dim2i(donateButtonDim.x() - 12 - size, tabFrameDim.y() - 26, 10 + size, 20);
             } else {
                 shaderPackButtonDim = new Dim2i(tabFrameDim.getLimitX() - size - 10, tabFrameDim.y() - 26, 10 + size, 20);
@@ -128,7 +193,7 @@ public class SodiumVideoOptionsScreen extends Screen {
             searchTextFieldDim = new Dim2i(tabFrameDim.x(), tabFrameDim.y() - 26, tabFrameDim.width() - (tabFrameDim.getLimitX() - shaderPackButtonDim.x()) - 2, 20);
 
             //FlatButtonWidget shaderPackButton = new FlatButtonWidget(shaderPackButtonDim, Text.translatable(IrisApi.getInstance().getMainScreenLanguageKey()), () -> this.client.setScreen((Screen) IrisApi.getInstance().openMainIrisScreenObj(this)));
-            FlatButtonWidget shaderPackButton = new FlatButtonWidget(shaderPackButtonDim, Text.translatable(IrisCompat.getIrisShaderPacksScreenLanguageKey()), () -> this.client.setScreen(IrisCompat.getIrisShaderPacksScreen(this)));
+            FlatButtonWidget shaderPackButton = new FlatButtonWidget(shaderPackButtonDim, Component.translatable(IrisCompat.getIrisShaderPacksScreenLanguageKey()), () -> this.minecraft.setScreen(IrisCompat.getIrisShaderPacksScreen(this)));
             basicFrameBuilder.addChild(dim -> shaderPackButton);
         }
 
@@ -167,10 +232,13 @@ public class SodiumVideoOptionsScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext drawContext, int mouseX, int mouseY, float delta) {
-        super.renderBackground(drawContext);
+    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
         this.updateControls();
-        this.frame.render(drawContext, mouseX, mouseY, delta);
+        super.render(guiGraphics, this.prompt != null ? -1 : mouseX, this.prompt != null ? -1 : mouseY, delta);
+        this.frame.render(guiGraphics, this.prompt != null ? -1 : mouseX, this.prompt != null ? -1 : mouseY, delta);
+        if (this.prompt != null) {
+            this.prompt.render(guiGraphics, mouseX, mouseY, delta);
+        }
     }
 
     private void updateControls() {
@@ -199,10 +267,10 @@ public class SodiumVideoOptionsScreen extends Screen {
 
     private void hideDonationButton() {
         SodiumGameOptions options = SodiumClientMod.options();
-        options.notifications.hideDonationButton = true;
+        options.notifications.hasClearedDonationButton = true;
 
         try {
-            options.writeChanges();
+            SodiumGameOptions.writeToDisk(options);
         } catch (IOException e) {
             throw new RuntimeException("Failed to save configuration", e);
         }
@@ -214,8 +282,8 @@ public class SodiumVideoOptionsScreen extends Screen {
     }
 
     private void openDonationPage() {
-        Util.getOperatingSystem()
-                .open("https://caffeinemc.net/donate");
+        Util.getPlatform()
+                .openUri("https://caffeinemc.net/donate");
     }
 
     private Stream<Option<?>> getAllOptions() {
@@ -238,15 +306,15 @@ public class SodiumVideoOptionsScreen extends Screen {
             dirtyStorages.add(option.getStorage());
         }));
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
 
         if (flags.contains(OptionFlag.REQUIRES_RENDERER_RELOAD)) {
-            client.worldRenderer.reload();
+            client.levelRenderer.allChanged();
         }
 
         if (flags.contains(OptionFlag.REQUIRES_ASSET_RELOAD)) {
-            client.setMipmapLevels(client.options.getMipmapLevels().getValue());
-            client.reloadResourcesConcurrently();
+            client.updateMaxMipLevel(client.options.mipmapLevels().get());
+            client.delayTextureReload();
         }
 
         for (OptionStorage<?> storage : dirtyStorages) {
@@ -260,9 +328,22 @@ public class SodiumVideoOptionsScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (this.prompt != null) {
+            return this.prompt.mouseClicked(mouseX, mouseY, button);
+        }
+
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.prompt != null) {
+            return this.prompt.keyPressed(keyCode, scanCode, modifiers);
+        }
+
         if (keyCode == GLFW.GLFW_KEY_P && (modifiers & GLFW.GLFW_MOD_SHIFT) != 0 && !(this.searchTextField != null && this.searchTextField.isFocused())) {
-            MinecraftClient.getInstance().setScreen(new VideoOptionsScreen(this.prevScreen, MinecraftClient.getInstance().options));
+            Minecraft.getInstance().setScreen(new VideoSettingsScreen(this.prevScreen, Minecraft.getInstance().options));
 
             return true;
         }
@@ -276,9 +357,37 @@ public class SodiumVideoOptionsScreen extends Screen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         lastSearch.set("");
         lastSearchIndex.set(0);
-        this.client.setScreen(this.prevScreen);
+        this.minecraft.setScreen(this.prevScreen);
+    }
+
+    @Override
+    public void setPrompt(@Nullable ScreenPrompt prompt) {
+        this.prompt = prompt;
+    }
+
+    @Override
+    public @Nullable ScreenPrompt getPrompt() {
+        return this.prompt;
+    }
+
+    @Override
+    public Dim2i getDimensions() {
+        return new Dim2i(0, 0, this.width, this.height);
+    }
+
+
+    private static final List<FormattedText> DONATION_PROMPT_MESSAGE;
+
+    static {
+        DONATION_PROMPT_MESSAGE = List.of(
+                FormattedText.composite(Component.literal("Hello!")),
+                FormattedText.composite(Component.literal("It seems that you've been enjoying "), Component.literal("Sodium").withColor(0x27eb92), Component.literal(", the free and open-source optimization mod for Minecraft.")),
+                FormattedText.composite(Component.literal("Mods like these are complex. They require "), Component.literal("thousands of hours").withColor(0xff6e00), Component.literal(" of development, debugging, and tuning to create the experience that players have come to expect.")),
+                FormattedText.composite(Component.literal("If you'd like to show your token of appreciation, and support the development of our mod in the process, then consider "), Component.literal("buying us a coffee").withColor(0xed49ce), Component.literal(".")),
+                FormattedText.composite(Component.literal("And thanks again for using our mod! We hope it helps you (and your computer.)"))
+        );
     }
 }
