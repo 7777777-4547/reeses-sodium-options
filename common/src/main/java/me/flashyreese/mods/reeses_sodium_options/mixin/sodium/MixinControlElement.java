@@ -29,9 +29,9 @@ public abstract class MixinControlElement extends AbstractWidget {
         if (this.getOption() instanceof OptionExtended optionExtended && optionExtended.isHighlight()) {
             String replacement = optionExtended.getSelected() ? ChatFormatting.DARK_GREEN.toString() : ChatFormatting.YELLOW.toString();
 
-            s = s.replace(ChatFormatting.WHITE.toString(), ChatFormatting.WHITE + replacement);
-            s = s.replace(ChatFormatting.STRIKETHROUGH.toString(), ChatFormatting.STRIKETHROUGH + replacement);
-            s = s.replace(ChatFormatting.ITALIC.toString(), ChatFormatting.ITALIC + replacement);
+            s = s.replace(ChatFormatting.WHITE.toString(), replacement);
+            s = s.replace(ChatFormatting.STRIKETHROUGH.toString(), replacement + ChatFormatting.STRIKETHROUGH);
+            s = s.replace(ChatFormatting.ITALIC.toString(), replacement + ChatFormatting.ITALIC);
         }
 
         this.drawString(drawContext, s, x, y, color);
